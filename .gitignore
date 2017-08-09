@@ -1,0 +1,11 @@
+.git
+.idea
+supervisord.*
+data/*
+node_modules/gulp
+project/node_modules/*
+project/vendor/bin
+other/logs/*
+other/logs/security/*
+project/storage/logs/laravel.log
+project/configs/active

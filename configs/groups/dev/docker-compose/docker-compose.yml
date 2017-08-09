@@ -1,0 +1,113 @@
+####################
+## docker-compose ##
+####################
+## Table of contents
+##  
+##  А. Version of docker-compose.yml
+##  Б. Assembling of the project environment
+##
+##    Б1. NGINX + PHPFPM
+##    Б2. MySQL
+##    Б3. Redis
+##    Б4. NodeJS + всякие плагины (bower, gulp, ...)
+##
+
+# А. Version of docker-compose.yml
+version: '3'
+
+# Б. Assembling of the project environment
+services: 
+
+  # Б1. NGINX + PHPFPM
+  nginx: 
+    image: warpcomplex/phpnginx
+    ports:
+      - "80:80"
+      - "443:443"
+      - "25:25"
+      - "587:587"
+      - "465:465"
+      - "993:993"
+      - "143:143"
+      - "110:110"
+      - "995:995"
+      - "9050:9050"
+      - "9051:9051"
+      - "9150:9150"
+    volumes:
+      - /c/WARP:/c/WARP
+      - <path_to_the_project>:<path_to_the_project>
+      - <path_to_the_project>/other/logs/mail.log:/var/log/mail.log
+      # - <path_to_the_project>/configs/active/postfix/main.cf:/etc/postfix/main.cf
+      - <path_to_the_project>/configs/active/supervisor/supervisor-docker-nginx_phpfpm-dev.ini:/etc/supervisor.d/supervisor-docker-nginx_phpfpm-dev.ini
+      - <path_to_the_project>/configs/active/php/php.ini:/etc/php/7.0/fpm/php.ini
+      - <path_to_the_project>/configs/active/nginx/nginx.conf:/etc/nginx/nginx.conf
+      - <path_to_the_project>/configs/active/nginx/.htpasswd:/etc/nginx/.htpasswd
+      - <path_to_the_project>/configs/active/nginx/sites:/etc/nginx/sites-enabled
+      - <path_to_the_project>/configs/active/tor/torrc:/etc/tor/torrc
+      - <path_to_the_project>/configs/active/bash/.bashrc:/root/.bashrc
+      - <path_to_the_project>/configs/active/logrotate/rotate_project_logs_original:/etc/logrotate.d/rotate_project_logs_original
+    links:
+      - mysql:mysql
+      - redis:redis
+      - node:node
+    working_dir: $PWD
+    restart: on-failure:10
+    environment:
+      REDIS_PORT: 6379
+      CONFIGS_GROUP: <name_of_configs_group>
+    stop_grace_period: 30s
+    
+  # Б2. MySQL
+  # restart: on-failure:10
+  # restart: no
+  mysql:
+    image: warpcomplex/mysql
+    ports:
+      - "3306:3306"
+    volumes:
+      - /c/WARP:/c/WARP
+      - <path_to_the_project>:<path_to_the_project>
+      - <path_to_the_project>/configs/active/supervisor/supervisor-docker-mysql-dev.ini:/etc/supervisor.d/supervisor-docker-mysql-dev.ini  
+      - <path_to_the_project>/configs/active/mysql/my.cnf:/etc/mysql/conf.d/my_cnf_original
+      - <path_to_the_project>/data/mysql:/var/lib/mysql
+      - <path_to_the_project>/other/mysql_plugins/audit_login.so:/usr/lib/mysql/plugin/audit_login.so
+    environment:
+      MYSQL_ROOT_PASSWORD: 1234567890
+      CONFIGS_GROUP: <name_of_configs_group>
+    restart: "on-failure:10"
+    stop_grace_period: 30s
+
+  # Б3. Redis
+  redis:
+    image: warpcomplex/redis
+    command: redis-server /usr/local/etc/redis/redis.conf --requirepass 1234567890
+    volumes:
+      - <path_to_the_project>:<path_to_the_project>
+      - <path_to_the_project>/data/redis:/data/redis
+      - <path_to_the_project>/configs/active/redis/redis.conf:/usr/local/etc/redis/redis.conf    
+  #  ports:
+  #    - "6379:6379"
+    restart: on-failure:10
+    environment:
+      CONFIGS_GROUP: <name_of_configs_group>  
+    stop_grace_period: 30s
+
+  # Б4. NodeJS
+  node:
+    image: warpcomplex/nodejs
+    volumes:
+      - <path_to_the_project>:<path_to_the_project>
+      - <path_to_the_project>/configs/active/supervisor/supervisor-docker-node-dev.ini:/etc/supervisor.d/supervisor-docker-node-dev.ini    
+    ports:
+      - "6001:6001"
+    working_dir: $PWD
+    environment:
+      CONFIGS_GROUP: <name_of_configs_group>  
+    links:
+      - redis:redis
+    stop_grace_period: 30s
+
+
+
+    

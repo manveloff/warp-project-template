@@ -1,0 +1,195 @@
+#!/bin/bash
+#####################
+##      update     ##
+########################################################
+## Обновить среду и файлы проекта с репчика на GitHub ##
+########################################################
+: '
+  
+  1. Остановить проект
+  2. Определить название группы конфигов для запуска приложения
+  3. Определить, запускать ли проект после обновления
+  4. Удалить все образы проекта
+  5. Получить URL репозитория проекта, проверить его
+  6. Проверить существование .gitignore в корне проекта
+  7. Скачать новые файлы проекта, заменить ими старые
+  8. Сообщить об успешном обновлении
+  9. Запустить проект, если не была передана опция -n
+
+'
+#########################################################################
+func_wrapper_update () { 
+
+  # 1. Остановить проект
+  . app down
+
+  # 2. Определить название группы конфигов для запуска приложения
+  # - Которую надо будет применить для запуска приложения
+
+    # 2.1. Подготовить значение по умолчанию
+    cogfigs_group=$cogfigs_group_default
+
+    # 2.2. Если команде update переданы какие-то опции
+    if [ $# != 0 ]; then
+      
+      # Провести парсинг этих опций
+      OPTIND=1
+      while getopts ":c:" opt; do
+        case $opt in
+
+          # Если опция -c передана
+          c)
+            # Если:
+            # - Значение опции -c не пусто
+            # - Существует группа опций с таким именем
+            # То:
+            # - Записать это значение в $cogfigs_group
+            if [ -n "$OPTARG" ] && [ -d "$PWD/configs/groups/$OPTARG" ]; then
+              cogfigs_group=$OPTARG
+            fi
+            ;;
+        esac
+      done      
+
+    fi
+
+  # 3. Определить, запускать ли проект после обновления
+
+    # 3.1. Подготовить значение по умолчанию
+    is_up_after_update=1
+
+    # 3.2. Если команде up переданы какие-то опции
+    if [ $# != 0 ]; then
+      
+      # Провести парсинг этих опций
+      OPTIND=1
+      while getopts ":n" opt; do
+        case $opt in
+
+          # Если опция -n передана
+          n)
+            # Назначить $is_up_after_update=1
+            is_up_after_update=0
+            ;;
+        esac
+      done      
+
+    fi
+
+  # 4. Удалить все образы проекта
+
+    # 4.1. Сообщить о начале остановки проекта
+    echo -en "$YELLOW--- app update ---> Удаляю все образы проекта...$NORMAL"    
+
+    # 4.2. Остановить проект
+    {
+      docker-compose rm   
+    } || {
+      echo -e "$RED--- app update ---> Ошибка! Cм.строку $LINENO скрипта $BASH_SOURCE$NORMAL"
+      return
+    }
+
+    # 4.3. Сообщить об успехе
+    echo -e "$GREEN Успех! $NORMAL"
+
+  # 5. Получить URL репозитория проекта, проверить его  
+
+    # 5.1. Получить url
+    
+      # Получить
+      url=$project_github_url
+     
+      # Сообщить
+      echo -e "$YELLOW--- app update ---> Из конфига CLI-приложения (other/cli/config) получен URL репозитория проекта: '$url'$NORMAL"
+
+    # 5.2. Проверить, установлен ли git
+    # - Он потребуется, чтобы скачать проект с github
+    command -v git >/dev/null 2>&1 || { 
+      echo -e >&2 "$RED--- app update ---> Ошибка! Для обновления проекта требуется наличие установленного git, но оный найден. $NORMAL"; 
+    }    
+
+    # 5.3. Проверить, доступен ли github-репчик по адресу $url
+    
+      # Сообщить о начале проверки
+      echo -en "$YELLOW--- app update ---> Проверяю существование такого репозитория...$NORMAL"
+
+      # Проверить
+      GIT_ASKPASS=true git ls-remote "$url" > /dev/null 2>&1
+      if [ "$?" -ne 0 ] && [ -n $url ]
+        then 
+          echo -e "$RED Не существует! Завершаю. $NORMAL"
+          return
+        else 
+          echo -e "$GREEN Существует! $NORMAL"
+      fi
+
+  # 6. Проверить существование .gitignore в корне проекта
+  echo -ne "$YELLOW--- app update ---> Проверяю существование необходимого файла .gitignore в корне проекта...$NORMAL"
+  if [ -f .gitignore ]
+    then 
+      echo -e "$GREEN Существует! $NORMAL"
+    else 
+      echo -e "$RED Не существует! Завершаю. $NORMAL"
+      return
+  fi
+
+  # 7. Скачать новые файлы проекта, заменить ими старые
+  {
+
+    # 7.1. Удалить каталог tmp4git, если он есть
+    if [ -d tmp4git ]; then
+      echo -en "$YELLOW --- app update ---> Удаляю старый каталог tmp4git... $NORMAL"
+      sudo rm -rf tmp4git
+      echo -e "$GREEN Успех! $NORMAL"
+    fi
+
+    # 7.2. Создать временный каталог, скопировать в него файлы
+    echo -en "$YELLOW --- app update ---> Копирую свежие файлы проекта из удалённого репозитория во временный каталог tmp4git... $NORMAL"
+    mkdir -p tmp4git
+    git clone $url tmp4git
+    echo -e "$GREEN Успех! $NORMAL"
+
+    # 7.3. Удалить из tmp4git все указанные в tmp4git/.gitignore файлы/каталоги
+    while read line; do 
+      
+      # Удалить файл/каталог tmp4git/$line, если такой есть
+      if [ -f "tmp4git/$line" ] || [ -d "tmp4git/$line" ]; then
+        
+        # Если $line не пуста
+        if [ -n "$line" ]; then
+          echo "tmp4git/$line"
+          sudo rm -rf "tmp4git/$line"
+        fi
+      
+      fi
+
+    done < tmp4git/.gitignore
+
+    # 7.4. Скопировать всё с заменой из tmp4git в корень проекта
+    echo -en "$YELLOW --- app update ---> Копирую все с заменой из tmp4git в корень проекта... $NORMAL"
+    cp -rf tmp4git/. .
+    echo -e "$GREEN Успех! $NORMAL"
+
+    # 7.5. Удалить каталог tmp4git
+    if [ -d tmp4git ]; then
+      echo -en "$YELLOW --- app update ---> Удаляю каталог tmp4git... $NORMAL"
+      sudo rm -rf tmp4git
+      echo -e "$GREEN Успех! $NORMAL"
+    fi
+
+  } || {
+    echo -e "$RED--- app update ---> Ошибка! Cм.строку $LINENO скрипта $BASH_SOURCE$NORMAL"
+    return
+  }
+
+  # 8. Сообщить об успешном обновлении
+  echo -e "$GREEN--- app update ---> Проект успешно обновлён!$NORMAL"
+
+  # 9. Запустить проект, если не была передана опция -n
+  if [ "$is_up_after_update" = 1 ]; then
+    . app up -c "$cogfigs_group"
+  fi
+
+:;}
+func_wrapper_update "$@"
+

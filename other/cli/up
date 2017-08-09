@@ -1,0 +1,274 @@
+#!/bin/bash
+#####################
+##        up       ##
+###############################################
+## Запустить проект с помощью docker-compose ##
+###############################################
+: '
+  
+  1. Определить название группы конфигов для запуска приложения
+  2. Скопировать конфиги из configs/groups/$configs_group в места назначения
+    2.1. Скопировать configs/groups/$configs_group/environment в configs/active
+    2.2. Скопировать файл configs/groups/$configs_group/laravel/.env в project/.env
+    2.3. Скопировать файл configs/groups/$configs_group/docker-compose/docker-compose.yml в docker-compose.yml
+    2.4. Скопировать configs/groups/$configs_group/bootstrap в configs/active
+    2.5. Скопировать configs/groups/$configs_group/firewall в configs/active
+  3. Произвести простановку плейсхолдеров в ряде файлов
+  4. Добавить в .gitignore запись "data/*", если таковой нет
+  n. Запустить проект
+  m. Применить правила для настройки iptables на хост-сервере
+
+'
+#########################################################################
+func_wrapper_up () { 
+
+  # 1. Определить название группы конфигов для запуска приложения
+  # - Которую надо будет применить для запуска приложения
+
+    # 1.1. Подготовить значение по умолчанию
+    configs_group=$configs_group_default
+
+    # 1.2. Если команде up переданы какие-то опции
+    if [ $# != 0 ]; then
+      
+      # Провести парсинг этих опций
+      OPTIND=1
+      while getopts ":c:" opt; do
+        case $opt in
+
+          # Если опция -c передана
+          c)
+            # Если:
+            # - Значение опции -c не пусто
+            # - Существует группа опций с таким именем
+            # То:
+            # - Записать это значение в $configs_group
+            if [ -n "$OPTARG" ] && [ -d "$PWD/configs/groups/$OPTARG" ]; then
+              configs_group=$OPTARG
+            fi
+            ;;
+        esac
+      done      
+
+    fi
+
+  # 2. Скопировать конфиги из configs/groups/$configs_group в места назначения  
+    
+    # 2.1. Скопировать configs/groups/$configs_group/environment в configs/active
+    
+      # 1] Сообщить
+      echo -en "$YELLOW--- app up ---> Применяю группу конфигов $RED$configs_group\n"
+      echo -en "$YELLOW--- app up ---> Копирую конфиги из $configs_group/environment в configs/active ...$NORMAL"
+
+      # 2] Скопировать
+      {
+        sudo cp -rf configs/groups/$configs_group/environment/* configs/active/
+        sudo chmod -R 777 configs/active
+      } || {
+        echo -e "$RED--- app up ---> Ошибка! Cм.строку $LINENO скрипта $BASH_SOURCE$NORMAL"
+        return
+      }  
+
+      # 3] Сообщить об успехе
+      echo -e "$GREEN Успех! $NORMAL"    
+
+    # 2.2. Скопировать файл configs/groups/$configs_group/laravel/.env в project/.env  
+
+      # 1] Сообщить
+      echo -en "$YELLOW--- app up ---> Копирую файл configs/groups/$configs_group/laravel/.env в project/.env ...$NORMAL"
+
+      # 2] Скопировать
+      {
+        sudo cp -f configs/groups/$configs_group/laravel/.env project/.env
+        sudo chmod -R 777 project/.env
+      } || {
+        echo -e "$RED--- app up ---> Ошибка! Cм.строку $LINENO скрипта $BASH_SOURCE$NORMAL"
+        return
+      }  
+
+      # 3] Сообщить об успехе
+      echo -e "$GREEN Успех! $NORMAL"    
+
+    # 2.3. Скопировать файл configs/groups/$configs_group/docker-compose/docker-compose.yml в docker-compose.yml
+
+      # 1] Сообщить
+      echo -en "$YELLOW--- app up ---> Копирую файл configs/groups/$configs_group/docker-compose/docker-compose.yml в docker-compose.yml ...$NORMAL"
+
+      # 2] Скопировать
+      {
+        sudo cp -f configs/groups/$configs_group/docker-compose/docker-compose.yml docker-compose.yml
+        sudo chmod -R 777 docker-compose.yml
+      } || {
+        echo -e "$RED--- app up ---> Ошибка! Cм.строку $LINENO скрипта $BASH_SOURCE$NORMAL"
+        return
+      }  
+
+      # 3] Сообщить об успехе
+      echo -e "$GREEN Успех! $NORMAL"    
+
+    # 2.4. Скопировать configs/groups/$configs_group/bootstrap в configs/active
+    
+      # 1] Сообщить
+      echo -en "$YELLOW--- app up ---> Копирую конфиги из $configs_group/bootstrap в configs/active/bootstrap ...$NORMAL"
+
+      # 2] Скопировать
+      {
+        sudo cp -rf configs/groups/$configs_group/bootstrap configs/active
+        sudo chmod -R 777 configs/active
+      } || {
+        echo -e "$RED--- app up ---> Ошибка! Cм.строку $LINENO скрипта $BASH_SOURCE$NORMAL"
+        return
+      }  
+
+      # 3] Сообщить об успехе
+      echo -e "$GREEN Успех! $NORMAL"       
+      
+    # 2.5. Скопировать configs/groups/$configs_group/firewall в configs/active
+    
+      # 1] Сообщить
+      echo -en "$YELLOW--- app up ---> Копирую конфиги из $configs_group/firewall в configs/active ...$NORMAL"
+
+      # 2] Скопировать
+      {
+        sudo cp -rf configs/groups/$configs_group/firewall configs/active/
+        sudo chmod -R 777 configs/active
+      } || {
+        echo -e "$RED--- app up ---> Ошибка! Cм.строку $LINENO скрипта $BASH_SOURCE$NORMAL"
+        return
+      }  
+
+      # 3] Сообщить об успехе
+      echo -e "$GREEN Успех! $NORMAL"         
+      
+  # 3. Произвести простановку плейсхолдеров в ряде файлов
+
+    # 3.1. Сообщить 
+    echo -e "$YELLOW--- app up ---> Произвожу подстановку плейсхолдеров (в т.ч. путей к корню проекта) в конфиги проекта...$NORMAL"
+    
+    # 3.2. Записать в переменную текущий путь и имя проекта
+    project_path=$PWD
+    project_name=$(basename "$PWD")
+    
+    # 3.3. Проставить пути
+    {
+      
+      # 1] Проставить пути в docker-compose.yml
+      echo -en "$YELLOW--- app up ---> -- docker-compose.yml ...$NORMAL"
+      sed -i -e "s#<path_to_the_project>#$project_path#g" docker-compose.yml
+      sed -i -e "s#<name_of_configs_group>#$configs_group#g" docker-compose.yml
+      echo -e "$GREEN Успех! $NORMAL"
+
+      # 2] Проставить пути в configs/active/nginx/sites/*
+      echo -en "$YELLOW--- app up ---> -- configs/active/nginx/sites/project.app ...$NORMAL"
+      for file in configs/active/nginx/sites/*  
+      do
+        sed -i -e "s#<path_to_the_project>#$project_path#g" $file
+      done      
+      echo -e "$GREEN Успех! $NORMAL"
+
+      # 3] Проставить пути в configs/active/supervisor/*
+      echo -en "$YELLOW--- app up ---> -- configs/active/supervisor/* ...$NORMAL"
+      sed -i -e "s#<path_to_the_project>#$project_path#g" configs/active/supervisor/*
+      echo -e "$GREEN Успех! $NORMAL"
+
+      # 4] Проставить путь к проекту в файлах configs/active/bootstrap/*
+      echo -en "$YELLOW--- app up ---> -- configs/active/bootstrap/* ...$NORMAL"
+      sed -i -e "s#<path_to_the_project>#$project_path#g" configs/active/bootstrap/*
+      echo -e "$GREEN Успех! $NORMAL"
+
+      # 5] Проставить пути в configs/active/logrotate/*
+      echo -en "$YELLOW--- app up ---> -- configs/active/logrotate/* ...$NORMAL"
+      sed -i -e "s#<path_to_the_project>#$project_path#g" configs/active/logrotate/*
+      echo -e "$GREEN Успех! $NORMAL"
+      
+      # 6] Проставить пути в configs/active/mysql/*
+      echo -en "$YELLOW--- app up ---> -- configs/active/mysql/* ...$NORMAL"
+      sed -i -e "s#<path_to_the_project>#$project_path#g" configs/active/mysql/*
+      echo -e "$GREEN Успех! $NORMAL"
+      
+      # 7] Проставить пути в configs/active/redis/*
+      echo -en "$YELLOW--- app up ---> -- configs/active/redis/* ...$NORMAL"
+      sed -i -e "s#<path_to_the_project>#$project_path#g" configs/active/redis/*
+      echo -e "$GREEN Успех! $NORMAL"
+      
+      # 8] Проставить пути в project/.env
+      echo -en "$YELLOW--- app up ---> -- project/.env ...$NORMAL"
+      sed -i -e "s#<path_to_the_project>#$project_path#g" project/.env
+      echo -e "$GREEN Успех! $NORMAL"          
+
+    } || {
+      echo -e "$RED--- app up ---> Ошибка! Cм.строку $LINENO скрипта $BASH_SOURCE$NORMAL"
+      return
+    }  
+ 
+  # 4. Добавить в .gitignore запись "data/*", если таковой нет
+
+    # 4.1. Проверить существование .gitignore в корне проекта
+    echo -ne "$YELLOW--- app up ---> Проверяю существование необходимого файла .gitignore в корне проекта...$NORMAL"
+    if [ -f .gitignore ]
+      then 
+        echo -e "$GREEN Существует! $NORMAL"
+      else 
+        echo -e "$RED Не существует! Завершаю. $NORMAL"
+        return
+    fi
+
+    # 4.2. Подготовим переменную отражающую наличие записи "data/*"
+    is_data_in_gitignore=0
+
+    # 4.3. Проверим наличие записи
+    while read line; do 
+      
+      if [ "$line" = "data/*" ]; then
+        is_data_in_gitignore=1
+        break;
+      fi
+
+    done < .gitignore
+
+    # 4.4. Если записи нет, добавить её в конец файла
+    if [ "$is_data_in_gitignore" = 0 ]; then
+      echo -e "$YELLOW--- app up ---> В .gitignore отсутствует запись 'data/*', создаю её. Она необходима, чтобы данные проекта (базы mysql, данные redis, и т.д.) не заливались в репозиторий проекта на github. $NORMAL"
+      echo -e "\ndata/*" >> .gitignore
+    fi   
+    
+  # n. Запустить проект
+
+    # n.1. Применить правила для настройки iptables на хост-сервере
+    configs/active/firewall/host_iptables_setup  
+    
+    # n.2. Сообщить
+    echo -e "$YELLOW--- app up ---> Начинаю запуск проекта...$NORMAL"    
+
+    # n.3. Запустить
+    {
+      docker-compose pull
+      docker-compose up -d --force-recreate     
+    } || {
+      echo -e "$RED--- app up ---> Ошибка! Cм.строку $LINENO скрипта $BASH_SOURCE$NORMAL"
+      return
+    }
+
+    # n.4. Сообщить об успешном запуске
+    echo -e "$GREEN--- app up ---> Проект успешно запущен!$NORMAL"    
+    
+  # m. Применить правила для настройки iptables на хост-сервере
+  
+    # m.1. Применить фаервол
+    configs/active/firewall/host_iptables_setup
+  
+    # m.2. Вывести текущие правила iptables (IPV4)
+    echo -e "$YELLOW--- app up ---> Установленные для хоста правила iptables (IPV4) $NORMAL"
+    echo "----------------------------"
+    sudo iptables -S
+    echo "----------------------------" 
+
+    # m.3. Вывести текущие правила iptables (IPV6)
+    echo -e "$YELLOW--- app up ---> Установленные для хоста правила iptables (IPV6) $NORMAL"
+    echo "----------------------------"
+    sudo ip6tables -S
+    echo "----------------------------" 
+    
+:;}
+func_wrapper_up "$@"
+
