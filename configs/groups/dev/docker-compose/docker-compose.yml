@@ -75,6 +75,7 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: 1234567890
       CONFIGS_GROUP: <name_of_configs_group>
+      MYSQL_DATABASE: warp
     restart: "on-failure:10"
     stop_grace_period: 30s
 
